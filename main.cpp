@@ -1,144 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
+#include "numeric.h"
 
 using namespace std;
-
-template <class T>
-using vec2D = vector< vector<T> >;
-
-vec2D<float> XOR(vec2D<float> &x) {
-  const int len = x.size();
-  vec2D<float> y(len, vector<float>(1, 0.0));
-
-  for(auto i = 0; i < len; i++) {
-    vector<float> pair = x[i];
-    y[i][0] = pair[0] * (1 - pair[1]) + pair[1] * (1 - pair[0]);
-  }
-
-  return y;
-}
-
-float sigmoid(float h, bool derv=false) {
-	if(derv) {
-		return h * (1 - h);
-	}
-
-  return 1 / (1 + exp(-h) );
-}
-
-void printVec(vec2D<float> &vec) {
-  for(auto outer : vec) {
-    for(auto inner : outer) {
-      cout << inner << " ";
-    }
-    cout << endl;
-  }
-
-  cout << endl;
-}
-
-vec2D<float> dot(vec2D<float> &a, vec2D<float> &b) {
-	const int m = a.size();
-	const int n = b[0].size();
-	const int o = a[0].size();
-
-	vec2D<float> c(m, vector<float>(n, 0.0));
-	for(auto i = 0; i < m; i++) {
-		for(auto j = 0; j < n; j++) {
-			for(auto k = 0; k < o; k++) {
-				c[i][j] += a[i][k] * b[k][j];
-			}
-		}
-	}
-
-	return c;
-}
-
-vec2D<float> multiply(vec2D<float> &a, vec2D<float> &b) {
-	const int m = a.size();
-	const int n = a[0].size();
-
-	vec2D<float> c(m, vector<float>(n, 0.0));
-	for(auto i = 0; i < m; i++) {
-		for(auto j = 0; j < n; j++) {
-			c[i][j] = a[i][j] * b[i][j];
-		}
-	}
-
-	return c;
-}
-
-vec2D<float> multiply(vec2D<float> &a, float b) {
-	const int m = a.size();
-	const int n = a[0].size();
-
-	vec2D<float> _b(a.size(), vector<float>(a[0].size(), b));
-
-	return multiply(a, _b);
-}
-
-vec2D<float> power(vec2D<float> &a, int n) {
-	vec2D<float> c(a.size(), vector<float>(a[0].size(), 1.0));
-	for(auto i = 0; i < n; i++) {
-		c = multiply(c, a);
-	}
-
-	return c;
-}
-
-vec2D<float> add(vec2D<float> &a, vec2D<float> &b) {
-	const int m = a.size();
-	const int n = a[0].size();
-
-	vec2D<float> c(m, vector<float>(n, 0.0));
-	for(auto i = 0; i < m; i++) {
-		for(auto j = 0; j < n; j++) {
-			c[i][j] = a[i][j] + b[i][j];
-		}
-	}
-
-	return c;
-}
-
-float sumVec(vec2D<float> &a) {
-	float _sum = 0.0;
-	for(auto outer : a) {
-		for(auto inner: outer) {
-			_sum += inner;
-		}
-	}
-
-	return _sum;
-}
-
-vec2D<float> subtract(vec2D<float> &a, vec2D<float> &b) {
-	const int m = a.size();
-	const int n = a[0].size();
-
-	vec2D<float> c(m, vector<float>(n, 0.0));
-	for(auto i = 0; i < m; i++) {
-		for(auto j = 0; j < n; j++) {
-			c[i][j] = a[i][j] - b[i][j];
-		}
-	}
-
-	return c;
-}
-
-vec2D<float> transpose(vec2D<float> &a) {
-	const int m = a.size();
-	const int n = a[0].size();
-
-	vec2D<float> c(n, vector<float>(m, 0.0));
-	for(auto i = 0; i < m; i++) {
-		for(auto j = 0; j < n; j++) {
-			c[j][i] = a[i][j];
-		}
-	}
-
-	return c;
-}
 
 class Layer {
   public:
@@ -280,8 +145,8 @@ class NN {
 			return error;
 		}
 
-		vec2D<float> fit(vec2D<float> X, vec2D<float> y, long epochs, bool verbose=false) {
-			vec2D<float> loss;
+		vector<float> fit(vec2D<float> X, vec2D<float> y, long epochs, bool verbose=false) {
+			vector<float> loss;
 
 			for(auto i = 0; i < epochs; i++) {
 				// Run forward
@@ -290,7 +155,7 @@ class NN {
 				// Run backprop
 				float error = backprop(yhat, y);
 
-				
+				loss.push_back(error);
 			}
 
 			return loss;
@@ -329,7 +194,7 @@ int main()
   //printVec(y);
 
   NN model = NN(2, 2, 1);
-  model.fit(X, y, 100000);
+  model.fit(X, y, 50000);
 
 	vec2D<float> yhat = model.predict(X);
 
