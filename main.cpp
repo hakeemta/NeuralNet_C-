@@ -5,6 +5,9 @@
 
 using namespace std;
 
+enum optimizer_t {SGD, RMS_PROP};
+enum loss_t {MSE, CE};
+
 class Layer {
   public:
 		vec2D<float> weights;
@@ -19,16 +22,16 @@ class Layer {
       nOutput = _nOutput;
       actFn = _actFn;
 
+			lr = 0.01;
+			beta = 0.9;
+			eps = 1e-8;
+
       init();
 
     }
 
   void init() {
-    weights.assign(
-      nInput, 
-      vector<float> (nOutput, 0.0)
-    );
-
+		weights = zeros(nInput, nOutput);
     // For each of the layer inputs
     for(int i = 0; i < nInput; i++) {
       // For each of the layer outputs
@@ -38,13 +41,17 @@ class Layer {
       }
     }
 
-    bias.assign(1, vector<float>(nOutput, 0.0));
+		bias = zeros(1, nOutput);
 
     cout << "W: " << endl;
     printVec(weights);
 
     cout << "b: " << endl;
     printVec(bias);
+
+		// RMSprop optimizer momentum params
+		vW = zeros(weights);
+		vB = zeros(bias);
   }
 
   vec2D<float> forward(vec2D<float> &_X) {
@@ -70,7 +77,27 @@ class Layer {
 		return y;
   }
 
-	vec2D<float> backprop(vec2D<float> dEdy) {
+	vec2D<float> movingAvg(vec2D<float> v, vec2D<float> d) {
+		d = power(d, 2);
+		d = multiply(d, beta);
+		
+		v = multiply(v, (1 - beta));
+		v = add(v, d);
+
+		return v;
+	}
+
+	vec2D<float> momentum(vec2D<float> d, vec2D<float> v) {
+		v = power(v, 0.5);
+		vec2D<float> _eps = ones(v);
+		_eps = multiply(_eps, eps);
+		v = add(v, _eps);
+
+		return divide(d, v);
+	}
+
+
+	vec2D<float> backprop(vec2D<float> dEdy, optimizer_t opt=SGD) {
 		vec2D<float> actDervY(y.size(), vector<float>(y[0].size(), 0.0) );
 		for(auto i = 0; i < y.size(); i++){
 			for(auto j = 0; j < y[0].size(); j++) {
@@ -80,20 +107,27 @@ class Layer {
 
 		vec2D<float> delta = multiply(dEdy, actDervY);
 
-		vec2D<float> dw = transpose(X);
-		dw = dot(dw, delta);
+		vec2D<float> dW = transpose(X);
+		dW = dot(dW, delta);
 
 		vec2D<float> id(1, vector<float>(delta.size(), 1.0) );
-		vec2D<float> db = dot(id, delta);
+		vec2D<float> dB = dot(id, delta);
 
-		float lr = 0.01;
+		dW = multiply(dW, lr);
+		dB = multiply(dB, lr);
+
+		if(opt == RMS_PROP){
+			// RMSprop optimizer
+			vW = movingAvg(vW, dW);
+			vB = movingAvg(vB, dB);
+
+			dW = momentum(dW, vW);
+			dB = momentum(dB, vB);
+		}
 		
-		dw = multiply(dw, lr);
-		weights = subtract(weights, dw);
+		weights = subtract(weights, dW);
 		// printVec(weights);
-
-		db = multiply(db, lr);
-		bias = subtract(bias, db);
+		bias = subtract(bias, dB);
 		// printVec(bias);
 
 		return delta;
@@ -104,8 +138,13 @@ class Layer {
     int nOutput;
     float (*actFn) (float, bool);
     vec2D<float> bias;
+		vec2D<float> vW;
+		vec2D<float> vB;
     vec2D<float> X;
 		vec2D<float> y;
+		float lr;
+		float beta;
+		float eps;
 };
 
 class NN {
@@ -121,21 +160,49 @@ class NN {
 
     vec2D<float> forward(vec2D<float> X) {
       vec2D<float> hiddenY = hiddenLayer.forward(X);
-      vec2D<float> outputY = outputLayer.forward(hiddenY);		
+      vec2D<float> outputY = outputLayer.forward(hiddenY);	
 
       return outputY;
     }
 
-		float backprop(vec2D<float> yhat, vec2D<float> y) {
+		float backprop(vec2D<float> yhat, vec2D<float> y, loss_t lossFn=MSE, optimizer_t opt=SGD) {
 			// Compute error
-			vec2D<float> vec = subtract(yhat, y);
-			vec = power(vec, 2);
-			float error = 0.5 * sumVec(vec) / yhat.size();
+			// vec2D<float> vec = subtract(yhat, y);
+			// vec = power(vec, 2);
+			// float error = 0.5 * sumVec(vec) / yhat.size();
+			// vec2D<float> dEdy = subtract(yhat, y);
 
-			vec2D<float> dEdy = subtract(yhat, y);
+			vec2D<float> vec;
+			float error;
+			vec2D<float> dEdy;
+			if(lossFn == MSE) {
+				vec = subtract(yhat, y);
+				vec = power(vec, 2);
+				error = 0.5 * sumVec(vec) / yhat.size();
+				
+				dEdy = subtract(yhat, y);
+			}
+			else if(lossFn == CE) {
+				vec = zeros(y);
+				dEdy = zeros(y);
+				for(auto i = 0; i < y.size(); i++){
+					for(auto j = 0; j < y[0].size(); j++) {
+						vec[i][j] = crossEntropy(yhat[i][j], y[i][j]);
+
+						dEdy[i][j] = crossEntropy(yhat[i][j], y[i][j], true);
+					}
+				}
+				error = sumVec(vec) / yhat.size();
+
+				for(auto i = 0; i < y.size(); i++){
+					for(auto j = 0; j < y[0].size(); j++) {
+						vec[i][j] = crossEntropy(yhat[i][j], y[i][j]);
+					}
+				}
+			}
 
 			// Output backprop
-			vec2D<float> outputDelta = outputLayer.backprop(dEdy);
+			vec2D<float> outputDelta = outputLayer.backprop(dEdy, opt);
 
 			// Hidden contributory errors; then hidden backprop
 			vec2D<float> _w = transpose(hiddenLayer.weights);
@@ -145,20 +212,23 @@ class NN {
 			return error;
 		}
 
-		vector<float> fit(vec2D<float> X, vec2D<float> y, long epochs, bool verbose=false) {
-			vector<float> loss;
+		vector<float> fit(vec2D<float> X, vec2D<float> y, long epochs, bool verbose=false, loss_t lossFn=MSE, optimizer_t opt=SGD) {
+			vector<float> errors;
 
 			for(auto i = 0; i < epochs; i++) {
 				// Run forward
 				vec2D<float> yhat = forward(X);
 
 				// Run backprop
-				float error = backprop(yhat, y);
+				float error = backprop(yhat, y, lossFn, opt);
 
-				loss.push_back(error);
+				errors.push_back(error);
+				if(verbose && i % 1000 == 0) {
+					cout << error << endl;
+				}	
 			}
 
-			return loss;
+			return errors;
 		}
 
 		vec2D<float> predict(vec2D<float> X) {
@@ -193,8 +263,10 @@ int main()
   //cout << "y:" << endl;
   //printVec(y);
 
+	// srand(1);
+
   NN model = NN(2, 2, 1);
-  model.fit(X, y, 50000);
+  vector<float> loss = model.fit(X, y, 8000, true, CE, RMS_PROP);
 
 	vec2D<float> yhat = model.predict(X);
 
