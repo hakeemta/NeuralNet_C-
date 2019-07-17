@@ -27,6 +27,36 @@ float sigmoid(float h, bool derv=false) {
   return 1 / (1 + exp(-h) );
 }
 
+float crossEntropy(float yhat, float y, bool derv=false) {
+	if(derv) {
+		return (yhat - y) / (yhat * (1- yhat) );
+	}
+
+	return -(y * log(yhat)) - ( (1 - y) * log(1 - yhat) );
+}
+
+vec2D<float> zeros(int m, int n) {
+	return vec2D<float>(m, vector<float>(n, 0.0));
+}
+
+vec2D<float> zeros(vec2D<float> &a) {
+	const int m = a.size();
+	const int n = a[0].size();
+
+	return zeros(m, n);
+}
+
+vec2D<float> ones(int m, int n) {
+	return vec2D<float>(m, vector<float>(n, 1.0));
+}
+
+vec2D<float> ones(vec2D<float> &a) {
+	const int m = a.size();
+	const int n = a[0].size();
+
+	return ones(m, n);
+}
+
 void printVec(vec2D<float> &vec) {
   for(auto outer : vec) {
     for(auto inner : outer) {
@@ -78,11 +108,33 @@ vec2D<float> multiply(vec2D<float> &a, float b) {
 	return multiply(a, _b);
 }
 
-vec2D<float> power(vec2D<float> &a, int n) {
-	vec2D<float> c(a.size(), vector<float>(a[0].size(), 1.0));
-	for(auto i = 0; i < n; i++) {
-		c = multiply(c, a);
+vec2D<float> divide(vec2D<float> &a, vec2D<float> &b) {
+	const int m = a.size();
+	const int n = a[0].size();
+
+	vec2D<float> c(m, vector<float>(n, 0.0));
+	for(auto i = 0; i < m; i++) {
+		for(auto j = 0; j < n; j++) {
+			c[i][j] = a[i][j] / b[i][j];
+		}
 	}
+
+	return c;
+}
+
+vec2D<float> power(vec2D<float> &a, float k) {
+	const int m = a.size();
+	const int n = a[0].size();
+	
+	vec2D<float> c(m, vector<float>(n, 1.0));
+	for(auto i = 0; i < m; i++) {
+		for(auto j = 0; j < n; j++) {
+			c[i][j] = pow(a[i][j], k);
+		}
+	}
+	// for(auto i = 0; i < n; i++) {
+	// 	c = multiply(c, a);
+	// }
 
 	return c;
 }
